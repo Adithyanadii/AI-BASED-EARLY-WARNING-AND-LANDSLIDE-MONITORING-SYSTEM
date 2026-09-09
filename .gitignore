@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Ignore original large NASA rainfall raster
+data/3B-DAY-L.GIS.IMERG*.tif
+
+# Ignore temporary historical rainfall downloads
+data/historical_rainfall/

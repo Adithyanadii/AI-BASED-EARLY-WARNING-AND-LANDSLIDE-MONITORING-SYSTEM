@@ -1,0 +1,14 @@
+{
+    "model": "Random Forest",
+    "features": [
+        "rainfall_mean_mm",
+        "rainfall_max_mm",
+        "rainfall_min_mm"
+    ],
+    "risk_classes": {
+        "0": "LOW",
+        "1": "MEDIUM",
+        "2": "HIGH"
+    },
+    "warning": "This is a baseline model. Risk labels are currently derived from rainfall thresholds. Real landslide observations will be added later."
+}
