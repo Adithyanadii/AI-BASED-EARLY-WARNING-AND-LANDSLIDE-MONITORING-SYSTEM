@@ -1,6 +1,5 @@
 # AI-Based Early Warning and Landslide Risk Monitoring System for NER
 
-## 🚀 Live Demo
 
 <h2>🚀 Try the Demo</h2>
 
