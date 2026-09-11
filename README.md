@@ -2,7 +2,11 @@
 
 ## 🚀 Live Demo
 
-👉 [Open the Working Demo](https://ai-based-early-warning-and-landslide-monitoring-system-tlzbc4o.streamlit.app/)
+<h2>🚀 Try the Demo</h2>
+
+<a href="https://ai-based-early-warning-and-landslide-monitoring-system-tlzbc4o.streamlit.app/">
+  <img src="https://img.shields.io/badge/🚀%20TRY%20DEMO-Live%20Application-2ea44f?style=for-the-badge" alt="Try Demo">
+</a>
 
 ## Smart India Hackathon 2026 — SIH26001
 
