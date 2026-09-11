@@ -4,8 +4,20 @@ import rasterio
 import numpy as np
 import geopandas as gpd
 import folium
+import pandas as pd
+import json
+import urllib.parse
+import urllib.request
+from shapely.geometry import Point
 
 from streamlit_folium import st_folium
+
+try:
+    from data.alert_engine import check_users_for_alerts
+    ALERT_ENGINE_READY = True
+except Exception:
+    check_users_for_alerts = None
+    ALERT_ENGINE_READY = False
 
 
 # ============================================================
@@ -149,6 +161,103 @@ NER_STATES = [
     "Tripura"
 ]
 
+SIKKIM_PLACES = {
+    "Gangtok": (27.3314, 88.6139),
+    "Mangan": (27.5258, 88.5615),
+    "Namchi": (27.1667, 88.3500),
+    "Gyalshing": (27.2895, 88.2645),
+    "Pakyong": (27.2300, 88.6200),
+    "Soreng": (27.1667, 88.2000),
+    "Singtam": (27.2347, 88.5014),
+    "Rangpo": (27.1767, 88.5331),
+    "Ravangla": (27.3125, 88.3639),
+    "Jorethang": (27.1069, 88.3233),
+    "Namthang": (27.0833, 88.4167),
+    "Melli": (27.0667, 88.4333),
+    "Temi": (27.2333, 88.3500),
+    "Rhenock": (27.2500, 88.7000),
+    "Rongli": (27.2167, 88.6833),
+    "Chungthang": (27.5889, 88.6433),
+    "Lachen": (27.7167, 88.7667),
+    "Lachung": (27.6875, 88.7386),
+    "Yuksom": (27.3667, 88.2167),
+    "Dentam": (27.2833, 88.2167),
+    "Pelling": (27.3050, 88.2390),
+    "Dikchu": (27.4200, 88.5800),
+    "Dzongu": (27.5600, 88.6200),
+    "Kabi": (27.4600, 88.6200),
+    "Phodong": (27.3900, 88.6100),
+    "Singhik": (27.5100, 88.6100),
+    "Passingdong": (27.5900, 88.5700),
+    "Yumthang": (27.7900, 88.6900),
+    "Zuluk": (27.8500, 88.7700),
+    "Aritar": (27.2500, 88.6800),
+    "Rolep": (27.2500, 88.7400),
+    "Gnathang": (27.7500, 88.7700),
+    "Kupup": (27.7500, 88.8500),
+    "Tsomgo": (27.3700, 88.7600),
+    "Nathu La": (27.3900, 88.8300),
+    "Tadong": (27.3150, 88.5900),
+    "Deorali": (27.3150, 88.6000),
+    "Rumtek": (27.3000, 88.5700),
+    "Ralang": (27.3000, 88.3600),
+    "Borang": (27.1800, 88.4100),
+    "Sichey": (27.3350, 88.6000),
+    "Majitar": (27.1450, 88.5400),
+}
+
+
+
+# Reference monitoring locations for all seven NER states.
+# These are geographic reference locations for prototype monitoring,
+# not historical landslide locations.
+ALL_NER_PLACES = {
+    "Assam": {
+        "Guwahati": (26.1445, 91.7362), "Dibrugarh": (27.4728, 94.9120),
+        "Silchar": (24.8333, 92.7789), "Jorhat": (26.7509, 94.2037),
+        "Tezpur": (26.6528, 92.7926), "Nagaon": (26.3484, 92.6838),
+        "Tinsukia": (27.4922, 95.3468), "Sivasagar": (26.9820, 94.6425),
+        "North Lakhimpur": (27.2352, 94.1036), "Diphu": (25.8430, 93.4316),
+        "Goalpara": (26.1667, 90.6167), "Dhemaji": (27.4833, 94.5833),
+    },
+    "Meghalaya": {
+        "Shillong": (25.5788, 91.8933), "Tura": (25.5144, 90.2033),
+        "Jowai": (25.4500, 92.2000), "Nongpoh": (25.9000, 91.8833),
+        "Nongstoin": (25.5167, 91.2667), "Williamnagar": (25.5000, 90.6000),
+        "Cherrapunji": (25.2700, 91.7300), "Mairang": (25.5500, 91.3000),
+        "Baghmara": (25.2000, 90.6333), "Resubelpara": (25.9000, 90.6000),
+    },
+    "Manipur": {
+        "Imphal": (24.8170, 93.9368), "Thoubal": (24.6380, 94.0100),
+        "Churachandpur": (24.3333, 93.6833), "Ukhrul": (25.0950, 94.3610),
+        "Senapati": (25.2670, 94.2600), "Tamenglong": (24.9833, 93.5000),
+        "Kakching": (24.5000, 94.0000), "Moirang": (24.4970, 93.7740),
+        "Jiribam": (24.8000, 93.1167), "Chandel": (24.3200, 94.2500),
+    },
+    "Mizoram": {
+        "Aizawl": (23.7271, 92.7176), "Lunglei": (22.8897, 92.7460),
+        "Champhai": (23.4670, 93.3280), "Kolasib": (24.2230, 92.6790),
+        "Serchhip": (23.3050, 92.8470), "Saiha": (22.4890, 92.9810),
+        "Lawngtlai": (22.5300, 92.9000), "Mamit": (23.9300, 92.4900),
+        "Khawzawl": (23.5200, 93.1200), "Hnahthial": (22.9800, 92.9300),
+    },
+    "Nagaland": {
+        "Kohima": (25.6751, 94.1086), "Dimapur": (25.9110, 93.7217),
+        "Mokokchung": (26.3220, 94.5180), "Tuensang": (26.2700, 94.8240),
+        "Mon": (26.7200, 95.0300), "Wokha": (26.1000, 94.2700),
+        "Zunheboto": (25.9700, 94.5200), "Phek": (25.6700, 94.4800),
+        "Kiphire": (25.8300, 94.7800), "Longleng": (26.4800, 94.8200),
+    },
+    "Tripura": {
+        "Agartala": (23.8315, 91.2868), "Dharmanagar": (24.3667, 92.1667),
+        "Kailashahar": (24.3300, 92.0100), "Udaipur": (23.5300, 91.4800),
+        "Belonia": (23.2500, 91.4500), "Ambassa": (23.9300, 91.8500),
+        "Khowai": (24.0700, 91.6000), "Sabroom": (23.0000, 91.7300),
+        "Teliamura": (24.0000, 91.5000), "Sonamura": (23.4800, 91.2700),
+    },
+}
+
+ALL_NER_PLACES["Sikkim"] = SIKKIM_PLACES
 
 # ============================================================
 # LOAD MODEL
@@ -359,69 +468,51 @@ def get_location_rainfall(
 # RAINFALL WARNING
 # ============================================================
 
+def priority_warning(risk, rainfall):
+    """Priority-location warning for Guwahati and Shillong.
+    Uses AI risk plus 1-day mean/max rainfall. Prototype thresholds only.
+    """
+    mean_mm = float(rainfall.get("mean", 0))
+    max_mm = float(rainfall.get("max", 0))
+    if mean_mm >= 100 or (risk == "HIGH" and mean_mm >= 50):
+        return "CRITICAL", "CRITICAL — Very high rainfall / high AI risk detected. Immediate monitoring is recommended."
+    if risk == "HIGH" or mean_mm >= 50 or max_mm >= 75:
+        return "HIGH", "HIGH — High AI risk or localized heavy rainfall detected. Enhanced early-warning monitoring is recommended."
+    if risk == "MEDIUM" or mean_mm >= 25 or max_mm >= 25:
+        return "WATCH", "WATCH — Elevated rainfall or moderate AI risk detected. Continue close monitoring."
+    return "LOW", "LOW — No elevated priority warning is currently detected."
+
+
 def rainfall_warning(
     rainfall
 ):
-
-    if rainfall >= 100:
-
-        return (
-            "RED",
-            "Severe rainfall warning"
-        )
-
-    elif rainfall >= 50:
-
-        return (
-            "ORANGE",
-            "Heavy rainfall watch"
-        )
-
-    elif rainfall >= 25:
-
-        return (
-            "YELLOW",
-            "Rainfall alert"
-        )
-
-    else:
-
-        return (
-            "GREEN",
-            "Normal rainfall"
-        )
-
-
-# ============================================================
-# EARLY WARNING SYSTEM
-# ============================================================
-
-def early_warning(rainfall):
     """
-    Prototype early-warning classification based on 1-day rainfall.
-    These thresholds are for the hackathon prototype and are NOT
-    official government warning thresholds.
+    Prototype early-warning classification.
+    These thresholds are not official government warning thresholds.
     """
 
     if rainfall >= 100:
         return (
             "CRITICAL",
-            "Immediate attention recommended: very high 1-day rainfall detected."
+            "CRITICAL — Very high rainfall detected. Immediate monitoring is recommended."
         )
+
     elif rainfall >= 50:
         return (
             "HIGH",
-            "High rainfall detected: monitor landslide-prone areas closely."
+            "HIGH — Heavy rainfall detected. Increased landslide-risk monitoring is recommended."
         )
+
     elif rainfall >= 25:
         return (
             "WATCH",
-            "Rainfall is elevated: continue close monitoring."
+            "WATCH — Elevated rainfall detected. Continue close monitoring."
         )
+
     else:
         return (
             "LOW",
-            "Rainfall is currently below the prototype warning threshold."
+            "LOW — No elevated rainfall warning is currently detected."
         )
 
 
@@ -476,6 +567,39 @@ def predict_risk(
 
 
 # ============================================================
+# EARLY WARNING / NOTIFICATION HELPERS
+# ============================================================
+
+def get_registered_user_count():
+    try:
+        users = pd.read_csv("data/registered_users.csv")
+        return len(users)
+    except Exception:
+        return 0
+
+
+def get_location_alerts(latitude, longitude, risk, rainfall_mm, max_rainfall_mm=None):
+    if not ALERT_ENGINE_READY or check_users_for_alerts is None:
+        return []
+
+    try:
+        # Use the stronger of mean and local maximum rainfall for
+        # early-warning decisions so localized heavy rainfall is not lost.
+        effective_rainfall = float(rainfall_mm)
+        if max_rainfall_mm is not None:
+            effective_rainfall = max(effective_rainfall, float(max_rainfall_mm))
+        return check_users_for_alerts(
+            latitude,
+            longitude,
+            risk,
+            effective_rainfall,
+            radius_km=25
+        )
+    except Exception:
+        return []
+
+
+# ============================================================
 # SIDEBAR
 # ============================================================
 
@@ -516,6 +640,33 @@ with st.sidebar:
 
     )
 
+    selected_place = None
+    selected_place_lat = None
+    selected_place_lon = None
+
+    st.subheader(f"{selected_state} Place")
+    state_places = ALL_NER_PLACES.get(selected_state, {})
+
+    if state_places:
+        selected_place = st.selectbox(
+            f"Select {selected_state} monitoring place",
+            list(state_places.keys()),
+            index=0,
+            key="ner_place_selector"
+        )
+        selected_place_lat, selected_place_lon = state_places[selected_place]
+        st.caption(
+            f"Coordinates: {selected_place_lat:.5f}, "
+            f"{selected_place_lon:.5f}"
+        )
+        if selected_state == "Assam" and selected_place == "Guwahati":
+            st.info("Guwahati is configured as the primary Assam early-warning monitoring location.")
+        elif selected_state == "Meghalaya" and selected_place == "Shillong":
+            st.info("Shillong is configured as the primary Meghalaya early-warning monitoring location.")
+    else:
+        st.info("Place list is not available for this state.")
+
+
 
     # Selected state
 
@@ -555,6 +706,15 @@ with st.sidebar:
     st.success(
         "Boundary data ready"
     )
+
+    if ALERT_ENGINE_READY:
+        st.success(
+            "Alert engine ready"
+        )
+    else:
+        st.warning(
+            "Alert engine unavailable"
+        )
 
 
     st.divider()
@@ -630,21 +790,19 @@ for state_name in NER_STATES:
         continue
 
 
-    point = (
-        selected
-        .geometry
-        .iloc[0]
-        .representative_point()
-    )
+    if state_name == selected_state and selected_place is not None:
+        latitude = float(selected_place_lat)
+        longitude = float(selected_place_lon)
+    else:
+        point = (
+            selected
+            .geometry
+            .iloc[0]
+            .representative_point()
+        )
 
-
-    latitude = float(
-        point.y
-    )
-
-    longitude = float(
-        point.x
-    )
+        latitude = float(point.y)
+        longitude = float(point.x)
 
 
     rainfall = get_location_rainfall(
@@ -670,6 +828,14 @@ for state_name in NER_STATES:
         rainfall_warning(
             rainfall["mean"]
         )
+    )
+
+    location_alerts = get_location_alerts(
+        latitude,
+        longitude,
+        risk,
+        rainfall["mean"],
+        rainfall.get("max")
     )
 
 
@@ -699,13 +865,60 @@ for state_name in NER_STATES:
         "warning_text":
             warning_text,
 
-        "early_warning_level":
-            early_warning(rainfall["mean"])[0],
-
-        "early_warning_text":
-            early_warning(rainfall["mean"])[1]
+        "alerts":
+            location_alerts
 
     })
+
+
+# ============================================================
+# PRIORITY EARLY-WARNING LOCATIONS
+# ============================================================
+# These two locations are explicitly monitored for the prototype:
+# Guwahati in Assam and Shillong in Meghalaya.
+# They use the same NASA rainfall -> AI risk -> alert pipeline.
+# The coordinates are monitoring/reference locations, not historical
+# landslide locations.
+
+PRIORITY_EARLY_WARNING_PLACES = {
+    "Assam": {
+        "Guwahati": (26.1445, 91.7362),
+    },
+    "Meghalaya": {
+        "Shillong": (25.5788, 91.8933),
+    },
+}
+
+priority_early_warning_results = []
+
+for ew_state, places in PRIORITY_EARLY_WARNING_PLACES.items():
+    for ew_place, (ew_lat, ew_lon) in places.items():
+        ew_rainfall = get_location_rainfall(ew_lat, ew_lon)
+        if ew_rainfall is None:
+            continue
+
+        ew_risk, ew_confidence = predict_risk(ew_rainfall)
+        ew_warning, ew_warning_text = priority_warning(ew_risk, ew_rainfall)
+        ew_alerts = get_location_alerts(
+            ew_lat,
+            ew_lon,
+            ew_risk,
+            ew_rainfall["mean"],
+            ew_rainfall.get("max")
+        )
+
+        priority_early_warning_results.append({
+            "state": ew_state,
+            "place": ew_place,
+            "latitude": ew_lat,
+            "longitude": ew_lon,
+            "rainfall": ew_rainfall,
+            "risk": ew_risk,
+            "confidence": ew_confidence,
+            "warning": ew_warning,
+            "warning_text": ew_warning_text,
+            "alerts": ew_alerts,
+        })
 
 
 # ============================================================
@@ -732,31 +945,11 @@ low_count = sum(
 
 warning_count = sum(
     result["warning"] in [
-        "RED",
-        "ORANGE"
+        "WATCH",
+        "HIGH",
+        "CRITICAL"
     ]
 
-    for result in results
-)
-
-
-critical_warning_count = sum(
-    result["early_warning_level"] == "CRITICAL"
-    for result in results
-)
-
-high_warning_count = sum(
-    result["early_warning_level"] == "HIGH"
-    for result in results
-)
-
-watch_warning_count = sum(
-    result["early_warning_level"] == "WATCH"
-    for result in results
-)
-
-low_warning_count = sum(
-    result["early_warning_level"] == "LOW"
     for result in results
 )
 
@@ -777,6 +970,46 @@ else:
 
 
 # ============================================================
+# ALERT SUMMARY
+# ============================================================
+
+all_alerts = []
+
+# Include alerts from the normal state monitoring results.
+for result in results:
+    all_alerts.extend(result.get("alerts", []))
+
+# Also include the dedicated Guwahati/Shillong early-warning checks.
+# Deduplicate by user + warning level so the same user is not counted twice
+# when one of these locations is also the currently selected state place.
+for ew_result in priority_early_warning_results:
+    all_alerts.extend(ew_result.get("alerts", []))
+
+unique_alerts = {}
+for alert in all_alerts:
+    key = (
+        str(alert.get("name", "")),
+        str(alert.get("phone", "")),
+        str(alert.get("alert_level", "")),
+    )
+    unique_alerts[key] = alert
+
+all_alerts = list(unique_alerts.values())
+
+unique_alert_users = set()
+
+for alert in all_alerts:
+    user_key = (
+        str(alert.get("name", "")),
+        str(alert.get("phone", ""))
+    )
+    unique_alert_users.add(user_key)
+
+registered_user_count = get_registered_user_count()
+alert_user_count = len(unique_alert_users)
+
+
+# ============================================================
 # REGIONAL OVERVIEW
 # ============================================================
 
@@ -789,7 +1022,7 @@ st.caption(
 )
 
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 
 
 with c1:
@@ -821,6 +1054,14 @@ with c4:
     st.metric(
         "Highest rainfall",
         f"{maximum_rainfall:.1f} mm"
+    )
+
+
+with c5:
+
+    st.metric(
+        "People at risk",
+        alert_user_count
     )
 
 
@@ -862,50 +1103,65 @@ else:
 
 
 # ============================================================
-# EARLY WARNING DASHBOARD
+# PRIORITY EARLY-WARNING MONITORING
 # ============================================================
 
-st.subheader(
-    "Early Warning Dashboard"
-)
-
+st.subheader("Priority Early-Warning Monitoring")
 st.caption(
-    "Prototype warning level derived from 1-day rainfall at monitored locations."
+    "Dedicated prototype monitoring for Guwahati, Assam and Shillong, Meghalaya. "
+    "The assessment uses the current NASA 1-day rainfall value, the prototype AI risk model, "
+    "and the location-based alert engine."
 )
 
-ew1, ew2, ew3, ew4 = st.columns(4)
+if priority_early_warning_results:
+    ew_cards = st.columns(len(priority_early_warning_results))
+    for card, ew_result in zip(ew_cards, priority_early_warning_results):
+        with card:
+            st.markdown(f"**{ew_result['place']}, {ew_result['state']}**")
+            st.metric("1-day rainfall", f"{ew_result['rainfall']['mean']:.1f} mm")
+            st.write(f"**AI Risk:** {ew_result['risk']}")
+            st.write(f"**Early Warning:** {ew_result['warning']}")
+            st.write(f"**Maximum rainfall:** {ew_result['rainfall']['max']:.1f} mm")
+            st.write(f"**Users to Alert:** {len(ew_result.get('alerts', []))}")
+            if ew_result.get("alerts"):
+                st.error("🚨 HIGH-PRIORITY ALERT — warning generated for a nearby registered user.")
+            elif ew_result["warning"] in ["HIGH", "CRITICAL"]:
+                st.error(f"🚨 {ew_result['warning']} PRIORITY ALERT — high-risk condition detected; no registered user is currently within the alert radius.")
+            elif ew_result["warning"] == "WATCH":
+                st.warning("WATCH — early warning condition detected; continue close monitoring.")
+            else:
+                st.success("LOW — no elevated priority warning currently detected.")
 
-with ew1:
-    st.metric("🔴 Critical", critical_warning_count)
-
-with ew2:
-    st.metric("🟠 High", high_warning_count)
-
-with ew3:
-    st.metric("🟡 Watch", watch_warning_count)
-
-with ew4:
-    st.metric("🟢 Low", low_warning_count)
-
-if critical_warning_count > 0:
-    st.error(
-        f"CRITICAL EARLY WARNING — {critical_warning_count} monitored "
-        "location(s) have rainfall at or above 100 mm."
-    )
-elif high_warning_count > 0:
-    st.warning(
-        f"HIGH EARLY WARNING — {high_warning_count} monitored location(s) "
-        "have rainfall at or above 50 mm."
-    )
-elif watch_warning_count > 0:
-    st.info(
-        f"WATCH — {watch_warning_count} monitored location(s) "
-        "have rainfall at or above 25 mm."
+    st.caption(
+        "Prototype warning thresholds: LOW < 25 mm, WATCH 25–50 mm, "
+        "HIGH 50–100 mm, CRITICAL ≥ 100 mm. These are not official government thresholds."
     )
 else:
-    st.success(
-        "LOW EARLY WARNING — No monitored representative location "
-        "currently crosses the prototype warning threshold."
+    st.warning("Priority early-warning rainfall assessment is unavailable for Guwahati/Shillong.")
+
+
+# ============================================================
+# PRIORITY ALERT SUMMARY
+# ============================================================
+
+priority_high_alerts = [
+    item for item in priority_early_warning_results
+    if item["warning"] in ["HIGH", "CRITICAL"]
+]
+
+if priority_high_alerts:
+    st.error(
+        "🚨 PRIORITY HIGH-RISK ALERT — "
+        + ", ".join(
+            f"{item['place']}, {item['state']} ({item['warning']})"
+            for item in priority_high_alerts
+        )
+    )
+else:
+    st.info(
+        "Priority high-risk detection is active for Guwahati and Shillong. "
+        "A HIGH/CRITICAL alert appears automatically when the AI risk or "
+        "prototype rainfall trigger reaches the configured threshold."
     )
 
 
@@ -919,22 +1175,184 @@ st.header(
 
 st.caption(
     "Rainfall intensity zones and AI risk locations. "
-    "Click a location inside NER for analysis."
+    "Click ANY location on the map — even if there is no colored dot — for a local assessment."
 )
 
 
+# ============================================================
+# DETAILED SIKKIM MONITORING
+# ============================================================
+
+# Keep the seven-state overview, while adding detailed monitoring
+# at every valid IMERG rainfall-grid cell inside Sikkim.
+detailed_sikkim_results = []
+
+# Approximate local place names used for prototype map popups.
+# These are reference locations, not exact reverse-geocoded addresses.
+SIKKIM_PLACES = [
+    (27.3314, 88.6139, "Gangtok"),
+    (27.5258, 88.5615, "Mangan"),
+    (27.3546, 88.6499, "Rangpo"),
+    (27.2315, 88.6550, "Namchi"),
+    (27.2810, 88.5510, "Ravangla"),
+    (27.2500, 88.3000, "Gyalshing"),
+    (27.6930, 88.7390, "Lachung"),
+    (27.7090, 88.7510, "Lachen"),
+    (27.3080, 88.6140, "Pakyong"),
+    (27.1900, 88.5200, "Jorethang"),
+    (27.3600, 88.7400, "Chungthang"),
+]
+
+def nearest_sikkim_place(latitude, longitude):
+    """Return the nearest well-known Sikkim reference place."""
+    best_name = "Sikkim monitoring area"
+    best_distance = float("inf")
+    for place_lat, place_lon, place_name in SIKKIM_PLACES:
+        # Simple local-distance approximation, sufficient for display.
+        dx = (longitude - place_lon) * np.cos(np.radians(latitude))
+        dy = latitude - place_lat
+        distance = dx * dx + dy * dy
+        if distance < best_distance:
+            best_distance = distance
+            best_name = place_name
+    return best_name
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def reverse_geocode_sikkim(latitude, longitude):
+    """Get a real nearby OSM place/address for a clicked Sikkim coordinate.
+    Falls back to the nearest known Sikkim reference place if the service is unavailable.
+    """
+    fallback = nearest_sikkim_place(latitude, longitude)
+    try:
+        params = urllib.parse.urlencode({
+            "lat": f"{latitude:.6f}",
+            "lon": f"{longitude:.6f}",
+            "format": "jsonv2",
+            "zoom": 14,
+            "addressdetails": 1,
+        })
+        url = "https://nominatim.openstreetmap.org/reverse?" + params
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "NER-Landslide-Risk-Monitoring-Prototype/1.0"
+            },
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        address = data.get("address", {})
+        # Prefer a named locality/village/town, then district/county.
+        place = (
+            address.get("village")
+            or address.get("town")
+            or address.get("city")
+            or address.get("municipality")
+            or address.get("hamlet")
+            or address.get("suburb")
+            or address.get("neighbourhood")
+            or address.get("county")
+            or fallback
+        )
+
+        district = address.get("state_district") or address.get("county") or ""
+        state = address.get("state") or "Sikkim"
+        return {"place": place, "district": district, "state": state}
+    except Exception:
+        return {"place": fallback, "district": "", "state": "Sikkim"}
+
+try:
+    sikkim_selected = ner_wgs84[
+        ner_wgs84[state_column] == "Sikkim"
+    ]
+
+    if not sikkim_selected.empty:
+        try:
+            sikkim_geometry = sikkim_selected.geometry.union_all()
+        except AttributeError:
+            sikkim_geometry = sikkim_selected.geometry.unary_union
+
+        with rasterio.open(RAINFALL_FILE) as sikkim_src:
+            sikkim_window = rasterio.windows.from_bounds(
+                *sikkim_geometry.bounds,
+                transform=sikkim_src.transform
+            ).round_offsets().round_lengths()
+
+            data = sikkim_src.read(1, window=sikkim_window).astype(float)
+            window_transform = sikkim_src.window_transform(sikkim_window)
+
+            rows, cols = np.where(data >= 0)
+
+            for row, col in zip(rows.tolist(), cols.tolist()):
+                lon, lat = rasterio.transform.xy(
+                    window_transform, row, col, offset="center"
+                )
+
+                point = gpd.points_from_xy([lon], [lat])[0]
+
+                if not sikkim_geometry.covers(point):
+                    continue
+
+                local_rainfall = get_location_rainfall(lat, lon)
+                if local_rainfall is None:
+                    continue
+
+                local_risk, local_confidence = predict_risk(local_rainfall)
+                local_warning, local_warning_text = rainfall_warning(
+                    local_rainfall["mean"]
+                )
+
+                detailed_sikkim_results.append({
+                    "latitude": float(lat),
+                    "longitude": float(lon),
+                    "rainfall": local_rainfall,
+                    "risk": local_risk,
+                    "confidence": local_confidence,
+                    "warning": local_warning,
+                    "warning_text": local_warning_text,
+                    "place": nearest_sikkim_place(float(lat), float(lon))
+                })
+except Exception:
+    detailed_sikkim_results = []
+
+
+if detailed_sikkim_results:
+    st.info(
+        f"Sikkim detailed monitoring: {len(detailed_sikkim_results)} valid "
+        "NASA IMERG rainfall-grid locations are assessed inside the state. "
+        "Colored points include a clearly-labelled synthetic demonstration mix for the prototype."
+    )
+else:
+    st.warning(
+        "Sikkim detailed monitoring layer is unavailable for the current rainfall raster."
+    )
+
+# Center the map on the place selected from the dropdown.
+# This works for every NER state.
+if selected_place is not None and selected_place_lat is not None and selected_place_lon is not None:
+    map_center = [selected_place_lat, selected_place_lon]
+    map_zoom = 10
+else:
+    map_center = [25.8, 92.0]
+    map_zoom = 6
+
 m = folium.Map(
 
-    location=[
-        25.8,
-        92.0
-    ],
+    location=map_center,
 
-    zoom_start=6,
+    zoom_start=map_zoom,
 
     control_scale=True
 
 )
+
+
+# Enable map-wide click detection. This makes a click on any
+# location in the map (not only on a monitoring dot) available
+# to Streamlit through last_clicked.
+# Place selection is handled reliably through the Sikkim dropdown.
+
+
 
 
 # ============================================================
@@ -972,6 +1390,36 @@ folium.GeoJson(
     )
 
 ).add_to(m)
+
+
+# ============================================================
+# SELECTED PLACE MARKER
+# ============================================================
+
+if selected_place is not None and selected_place_lat is not None and selected_place_lon is not None:
+
+    folium.Marker(
+
+        location=[selected_place_lat, selected_place_lon],
+
+        tooltip=f"Selected: {selected_place}, {selected_state}",
+
+        popup=folium.Popup(
+            f"<b>Selected Location</b><br>"
+            f"Place: <b>{selected_place}</b><br>"
+            f"State: <b>{selected_state}</b><br>"
+            f"Latitude: {selected_place_lat:.5f}<br>"
+            f"Longitude: {selected_place_lon:.5f}",
+            max_width=320
+        ),
+
+        icon=folium.Icon(
+            color="blue",
+            icon="map-marker",
+            prefix="glyphicon"
+        )
+
+    ).add_to(m)
 
 
 # ============================================================
@@ -1057,9 +1505,6 @@ for result in results:
             Warning:
             <b>{result['warning']}</b><br>
 
-            Early warning:
-            <b>{result['early_warning_level']}</b><br>
-
             Confidence:
             {result['confidence']:.1f}%
             """,
@@ -1071,7 +1516,40 @@ for result in results:
     ).add_to(m)
 
 
-    # AI marker
+    # AI marker + nearby alert details
+
+    alerts_here = result.get("alerts", []) or []
+
+    alert_html = ""
+
+    if alerts_here:
+
+        alert_html += "<hr><b>Nearby Registered Users</b><br>"
+
+        for alert in alerts_here:
+
+            alert_html += (
+                f"User: <b>{alert.get('name', 'Registered user')}</b><br>"
+                f"Alert level: <b>{alert.get('alert_level', 'WARNING')}</b><br>"
+                f"Distance: {float(alert.get('distance_km', 0)):.2f} km<br>"
+                f"Status: <b>WARNING GENERATED</b><br><br>"
+            )
+
+    else:
+
+        alert_html = "<hr><b>Nearby Registered Users</b><br>No alert currently required."
+
+    popup_html = f"""
+        <div style=\"font-size:14px; line-height:1.5;\">
+        <b style=\"font-size:17px;\">{result['state']}</b>
+        <hr>
+        <b>AI Risk:</b> {result['risk']}<br>
+        <b>1-day Rainfall:</b> {rainfall:.1f} mm<br>
+        <b>Warning:</b> {result['warning']}<br>
+        <b>Confidence:</b> {result['confidence']:.1f}%
+        {alert_html}
+        </div>
+    """
 
     folium.Marker(
 
@@ -1084,47 +1562,14 @@ for result in results:
         ],
 
         tooltip=(
-
             f"{result['state']} | "
-
-            f"{result['risk']}"
-
+            f"{result['risk']} | Click for details"
         ),
 
         popup=folium.Popup(
-
-            f"""
-            <b>{result['state']}</b>
-
-            <hr>
-
-            AI Risk:
-            <b>{result['risk']}</b>
-
-            <br>
-
-            Rainfall:
-            {rainfall:.1f} mm
-
-            <br>
-
-            Warning:
-            {result['warning']}
-
-            <br>
-
-            Early warning:
-            <b>{result['early_warning_level']}</b>
-
-            <br>
-
-            Confidence:
-            {result['confidence']:.1f}%
-
-            """,
-
-            max_width=300
-
+            popup_html,
+            max_width=380,
+            min_width=300
         ),
 
         icon=folium.Icon(
@@ -1138,7 +1583,231 @@ for result in results:
     ).add_to(m)
 
 
+# ============================================================
+# PRIORITY EARLY-WARNING MAP MARKERS
+# ============================================================
+
+for ew_result in priority_early_warning_results:
+    ew_color = "red" if ew_result["warning"] == "CRITICAL" else (
+        "orange" if ew_result["warning"] == "HIGH" else (
+            "beige" if ew_result["warning"] == "WATCH" else "green"
+        )
+    )
+
+    folium.Marker(
+        location=[ew_result["latitude"], ew_result["longitude"]],
+        tooltip=(
+            f"Early Warning: {ew_result['place']}, {ew_result['state']} | "
+            f"{ew_result['warning']}"
+        ),
+        popup=folium.Popup(
+            f"""
+            <b>PRIORITY EARLY-WARNING LOCATION</b><br>
+            <hr>
+            <b>Place:</b> {ew_result['place']}<br>
+            <b>State:</b> {ew_result['state']}<br>
+            <b>1-day Rainfall:</b> {ew_result['rainfall']['mean']:.1f} mm<br>
+            <b>AI Risk:</b> {ew_result['risk']}<br>
+            <b>Early Warning:</b> {ew_result['warning']}<br>
+            <b>Users to Alert:</b> {len(ew_result.get('alerts', []))}<br>
+            <small>Prototype monitoring/reference location.</small>
+            """,
+            max_width=340
+        ),
+        icon=folium.Icon(
+            color=ew_color,
+            icon="bell",
+            prefix="glyphicon"
+        )
+    ).add_to(m)
+
+
+# ============================================================
+# SIKKIM DETAILED MAP LAYER
+# ============================================================
+
+if detailed_sikkim_results:
+    sikkim_group = folium.FeatureGroup(
+        name=f"Sikkim Detailed Monitoring ({len(detailed_sikkim_results)} cells)",
+        show=True
+    )
+
+    for cell in detailed_sikkim_results:
+        cell_rainfall = cell["rainfall"]["mean"]
+
+        # The current AI baseline may produce mostly LOW values because it is
+        # trained on rainfall-derived prototype labels. For a visually useful
+        # hackathon coverage demonstration, add a clearly-labelled synthetic
+        # scenario layer with a small mix of HIGH/MEDIUM/LOW locations.
+        # This does NOT claim that these are historical landslide points.
+        demo_score = (
+            int(abs(cell["latitude"] * 10000))
+            + int(abs(cell["longitude"] * 10000))
+            + int(cell_rainfall * 10)
+        ) % 100
+
+        if cell["risk"] == "HIGH" or demo_score < 7:
+            cell_color = "red"
+            demo_risk = "HIGH"
+        elif cell["risk"] == "MEDIUM" or demo_score < 22:
+            cell_color = "orange"
+            demo_risk = "MEDIUM"
+        else:
+            cell_color = "green"
+            demo_risk = "LOW"
+
+        folium.CircleMarker(
+            location=[cell["latitude"], cell["longitude"]],
+            radius=5,
+            color=cell_color,
+            fill=True,
+            fillColor=cell_color,
+            fillOpacity=0.65,
+            weight=1,
+            tooltip=(
+                f"{cell['place']} | Sikkim | "
+                f"Demo Risk: {demo_risk} | Rainfall: {cell_rainfall:.1f} mm"
+            ),
+            popup=folium.Popup(
+                f"""
+                <b>Sikkim Detailed Monitoring</b><br>
+                <hr>
+                <b>Nearest Place:</b> {cell['place']}<br>
+                Latitude: {cell['latitude']:.5f}<br>
+                Longitude: {cell['longitude']:.5f}<br>
+                1-day Rainfall: {cell_rainfall:.1f} mm<br>
+                AI Risk: <b>{cell['risk']}</b><br>
+                AI Confidence: <b>{cell['confidence']:.1f}%</b><br>
+                <b>Demo Scenario Risk: {demo_risk}</b><br>
+                Early Warning: <b>{cell['warning']}</b><br>
+                <small>Demo Scenario Risk is synthetic for prototype visualization.
+                It is not a historical landslide location.</small>
+                """,
+                max_width=350
+            )
+        ).add_to(sikkim_group)
+
+    sikkim_group.add_to(m)
+
+# ============================================================
+# EARLY WARNING MAP MARKERS
+# ============================================================
+
+for alert in all_alerts:
+
+    matched_result = None
+
+    for result in results:
+
+        if any(
+            item.get("name") == alert.get("name")
+            and item.get("phone") == alert.get("phone")
+            for item in result.get("alerts", [])
+        ):
+            matched_result = result
+            break
+
+    if matched_result is not None:
+
+        folium.Marker(
+            [
+                matched_result["latitude"],
+                matched_result["longitude"]
+            ],
+            tooltip=(
+                f"Early warning: "
+                f"{alert.get('name', 'Registered user')}"
+            ),
+            popup=folium.Popup(
+                f"""
+                <b>EARLY WARNING</b><br>
+                <hr>
+                User: {alert.get('name', 'Registered user')}<br>
+                Level: <b>{alert.get('alert_level', 'WARNING')}</b><br>
+                Distance: {float(alert.get('distance_km', 0)):.2f} km<br>
+                Rainfall: {float(alert.get('rainfall_mm', 0)):.1f} mm<br>
+                <br>
+                Prototype warning generated.
+                """,
+                max_width=300
+            ),
+            icon=folium.Icon(
+                color="red",
+                icon="bell"
+            )
+        ).add_to(m)
+
+
+# ============================================================
+# LAST CLICK LOCATION POPUP
+# ============================================================
+# On the rerun caused by a map click, place a marker exactly at
+# the clicked coordinates so the user can immediately see the
+# approximate place name along with the coordinates.
+last_saved_click = st.session_state.get("last_map_click")
+
+if last_saved_click:
+    try:
+        click_lat = float(last_saved_click.get("lat"))
+        click_lon = float(last_saved_click.get("lng"))
+        click_point = Point(click_lon, click_lat)
+
+        # Check whether the clicked point is inside Sikkim.
+        click_is_sikkim = False
+        try:
+            sikkim_rows = ner_wgs84[
+                ner_wgs84[state_column].astype(str).str.strip().str.lower() == "sikkim"
+            ]
+            click_is_sikkim = sikkim_rows.geometry.covers(click_point).any()
+        except Exception:
+            click_is_sikkim = False
+
+        if click_is_sikkim:
+            click_place = nearest_sikkim_place(click_lat, click_lon)
+            click_rainfall = get_location_rainfall(click_lat, click_lon)
+
+            if click_rainfall is not None:
+                click_risk, click_confidence = predict_risk(click_rainfall)
+                click_warning, _ = rainfall_warning(click_rainfall["mean"])
+
+                click_popup = f"""
+                <div style='font-size:14px; line-height:1.55; min-width:250px;'>
+                    <b style='font-size:18px;'>📍 {click_place}</b><br>
+                    <b>Sikkim</b>
+                    <hr>
+                    <b>Place:</b> {click_place}<br>
+                    <b>Latitude:</b> {click_lat:.5f}<br>
+                    <b>Longitude:</b> {click_lon:.5f}<br>
+                    <b>1-day Rainfall:</b> {click_rainfall['mean']:.1f} mm<br>
+                    <b>AI Risk:</b> {click_risk}<br>
+                    <b>Warning:</b> {click_warning}<br>
+                    <b>AI Confidence:</b> {click_confidence:.1f}%
+                    <hr>
+                    <small>Place name is the nearest Sikkim reference location.</small>
+                </div>
+                """
+
+                folium.Marker(
+                    location=[click_lat, click_lon],
+                    tooltip=f"📍 {click_place} — Clicked Location",
+                    popup=folium.Popup(
+                        click_popup,
+                        max_width=380,
+                        min_width=280,
+                    ),
+                    icon=folium.Icon(color="blue", icon="map-marker"),
+                ).add_to(m)
+    except Exception:
+        pass
+
+
+# ============================================================
+# MAP LAYER CONTROL
+# ============================================================
+
 folium.LayerControl().add_to(m)
+
+
 
 
 # ============================================================
@@ -1155,9 +1824,18 @@ map_data = st_folium(
 
     returned_objects=[
         "last_clicked"
-    ]
+    ],
+
+    key="ner_risk_map"
 
 )
+
+# Remember the last map click so the Location Intelligence panel
+# remains populated after Streamlit reruns.
+if map_data and map_data.get("last_clicked"):
+    st.session_state["last_map_click"] = map_data["last_clicked"]
+
+last_click = st.session_state.get("last_map_click")
 
 
 # ============================================================
@@ -1190,7 +1868,16 @@ if selected_result is not None:
     ]
 
 
-    s1, s2, s3, s4, s5 = st.columns(5)
+    if selected_place is not None:
+        st.success(
+            f"📍 SELECTED PLACE: {selected_place} | {selected_state.upper()}"
+        )
+        st.caption(
+            f"Coordinates: {selected_place_lat:.5f}, "
+            f"{selected_place_lon:.5f}"
+        )
+
+    s1, s2, s3, s4 = st.columns(4)
 
 
     with s1:
@@ -1225,27 +1912,19 @@ if selected_result is not None:
         )
 
 
-    with s5:
-
-        st.metric(
-            "Early warning",
-            selected_result["early_warning_level"]
-        )
-
-
-    if selected_result["warning"] == "RED":
+    if selected_result["warning"] == "CRITICAL":
 
         st.error(
             selected_result["warning_text"]
         )
 
-    elif selected_result["warning"] == "ORANGE":
+    elif selected_result["warning"] == "HIGH":
 
         st.warning(
             selected_result["warning_text"]
         )
 
-    elif selected_result["warning"] == "YELLOW":
+    elif selected_result["warning"] == "WATCH":
 
         st.info(
             selected_result["warning_text"]
@@ -1256,6 +1935,72 @@ if selected_result is not None:
         st.success(
             selected_result["warning_text"]
         )
+
+
+    selected_alerts = selected_result.get(
+        "alerts",
+        []
+    )
+
+    if selected_alerts:
+
+        st.error(
+            f"EARLY WARNING — "
+            f"{len(selected_alerts)} registered user(s) "
+            f"are inside the prototype warning radius."
+        )
+
+        for alert in selected_alerts:
+
+            st.write(
+                f"**{alert.get('name', 'Registered user')}** — "
+                f"{alert.get('alert_level', 'WARNING')} — "
+                f"{float(alert.get('distance_km', 0)):.2f} km away"
+            )
+
+            if alert.get("message"):
+                st.caption(
+                    alert["message"]
+                )
+
+    else:
+
+        st.success(
+            "No registered user currently requires "
+            "an alert at this selected-state monitoring point."
+        )
+
+
+# ============================================================
+# SIKKIM COVERAGE SUMMARY
+# ============================================================
+
+if selected_state == "Sikkim" and detailed_sikkim_results:
+    st.subheader("Sikkim Detailed Coverage")
+    sc1, sc2, sc3 = st.columns(3)
+
+    with sc1:
+        st.metric("Sikkim monitoring cells", len(detailed_sikkim_results))
+
+    with sc2:
+        st.metric(
+            "High-risk cells",
+            sum(cell["risk"] == "HIGH" for cell in detailed_sikkim_results)
+        )
+
+    with sc3:
+        st.metric(
+            "Warning cells",
+            sum(
+                cell["warning"] in ["WATCH", "HIGH", "CRITICAL"]
+                for cell in detailed_sikkim_results
+            )
+        )
+
+    st.caption(
+        "Each cell represents a valid rainfall-grid location inside Sikkim. "
+        "Place names are approximate reference locations. Red/orange demo points are synthetic visualization scenarios, not historical landslides."
+    )
 
 
 # ============================================================
@@ -1269,36 +2014,36 @@ st.header(
 )
 
 st.caption(
-    "Click any location inside the NER map to "
-    "perform a local rainfall and AI assessment."
+    "Click ANY location inside Sikkim — even an empty area — to get the nearest real mapped place/area, coordinates, rainfall and AI assessment."
 )
 
 
-if (
+if last_click:
 
-    map_data
+    clicked_lat = float(last_click["lat"])
 
-    and
-
-    map_data.get(
-        "last_clicked"
-    )
-
-):
-
-    clicked_lat = (
-        map_data[
-            "last_clicked"
-        ]["lat"]
-    )
+    clicked_lon = float(last_click["lng"])
 
 
-    clicked_lon = (
-        map_data[
-            "last_clicked"
-        ]["lng"]
-    )
+    # Identify the state containing the clicked location.
+    clicked_state = "Outside monitored NER"
+    for _, state_row in ner_wgs84.iterrows():
+        try:
+            if state_row.geometry.covers(Point(clicked_lon, clicked_lat)):
+                clicked_state = str(state_row[state_column])
+                break
+        except Exception:
+            pass
 
+    # Always calculate a Sikkim place name from the clicked coordinates.
+    # Normalize the state text because boundary files can contain whitespace/case differences.
+    clicked_place = None
+    clicked_district = ""
+    if str(clicked_state).strip().lower() == "sikkim":
+        clicked_state = "Sikkim"
+        geo = reverse_geocode_sikkim(clicked_lat, clicked_lon)
+        clicked_place = geo["place"]
+        clicked_district = geo["district"]
 
     clicked_point = gpd.GeoDataFrame(
 
@@ -1319,9 +2064,9 @@ if (
     )
 
 
-    inside_ner = ner_wgs84.contains(
+    inside_ner = ner_wgs84.geometry.apply(
 
-        clicked_point.geometry.iloc[0]
+        lambda geom: geom.covers(clicked_point.geometry.iloc[0])
 
     ).any()
 
@@ -1367,6 +2112,30 @@ if (
             )
 
 
+            # Check registered users near the clicked location
+            clicked_alerts = get_location_alerts(
+                clicked_lat,
+                clicked_lon,
+                risk,
+                rainfall["mean"],
+                rainfall.get("max")
+            )
+
+
+            # Show a human-readable place for Sikkim clicks.
+            if clicked_state == "Sikkim":
+                # Make the place name impossible to miss in the dashboard.
+                st.success(
+                    f"📍 SELECTED PLACE: {clicked_place}  |  SIKKIM"
+                )
+                st.write(f"**Place / Area:** {clicked_place}")
+                if clicked_district:
+                    st.write(f"**District:** {clicked_district}")
+            else:
+                st.write(f"**Place/Area:** {clicked_state}")
+
+            st.write(f"**State:** {clicked_state}")
+
             st.write(
                 f"**Coordinates:** "
                 f"{clicked_lat:.5f}, "
@@ -1374,7 +2143,7 @@ if (
             )
 
 
-            l1, l2, l3, l4, l5 = st.columns(5)
+            l1, l2, l3, l4 = st.columns(4)
 
 
             with l1:
@@ -1409,31 +2178,19 @@ if (
                 )
 
 
-            clicked_early_warning, clicked_warning_text = early_warning(
-                rainfall["mean"]
-            )
-
-            with l5:
-
-                st.metric(
-                    "Early warning",
-                    clicked_early_warning
-                )
-
-
-            if warning_level == "RED":
+            if warning_level == "CRITICAL":
 
                 st.error(
                     warning_text
                 )
 
-            elif warning_level == "ORANGE":
+            elif warning_level == "HIGH":
 
                 st.warning(
                     warning_text
                 )
 
-            elif warning_level == "YELLOW":
+            elif warning_level == "WATCH":
 
                 st.info(
                     warning_text
@@ -1443,6 +2200,50 @@ if (
 
                 st.success(
                     warning_text
+                )
+
+
+            # Nearby-user notification result for this exact map click
+            st.subheader(
+                "Nearby User Notifications"
+            )
+
+            if clicked_alerts:
+
+                st.error(
+                    f"WARNING GENERATED — {len(clicked_alerts)} registered user(s) "
+                    "are within the prototype warning radius."
+                )
+
+                alert_rows = []
+
+                for alert in clicked_alerts:
+                    alert_rows.append({
+                        "User": alert.get("name", "Registered user"),
+                        "Alert Level": alert.get("alert_level", "WARNING"),
+                        "Distance (km)": round(float(alert.get("distance_km", 0)), 2),
+                        "Rainfall (mm)": round(float(alert.get("rainfall_mm", 0)), 1),
+                        "Status": "WARNING GENERATED"
+                    })
+
+                st.dataframe(
+                    pd.DataFrame(alert_rows),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                for alert in clicked_alerts:
+                    if alert.get("message"):
+                        st.caption(
+                            f"{alert.get('name', 'Registered user')}: "
+                            f"{alert['message']}"
+                        )
+
+            else:
+
+                st.info(
+                    "No registered user is currently inside the prototype "
+                    "warning radius for this selected location."
                 )
 
 
@@ -1482,6 +2283,119 @@ if (
                     "The prototype indicates lower "
                     "rainfall-driven pressure."
                 )
+
+
+# ============================================================
+# EARLY WARNING & NOTIFICATIONS
+# ============================================================
+
+st.divider()
+
+st.header(
+    "Early Warning & Notifications"
+)
+
+st.caption(
+    "Location-based prototype alerts for registered users. "
+    "This version generates warnings; it does not send "
+    "real SMS messages."
+)
+
+if not ALERT_ENGINE_READY:
+
+    st.warning(
+        "Alert engine is not connected. "
+        "Make sure data/alert_engine.py exists."
+    )
+
+else:
+
+    ew1, ew2, ew3 = st.columns(3)
+
+    with ew1:
+        st.metric(
+            "Registered users",
+            registered_user_count
+        )
+
+    with ew2:
+        st.metric(
+            "Users requiring alerts",
+            alert_user_count
+        )
+
+    with ew3:
+        st.metric(
+            "Warning locations",
+            sum(
+                bool(result.get("alerts"))
+                for result in results
+            )
+        )
+
+    if all_alerts:
+
+        st.error(
+            "ACTIVE PROTOTYPE ALERTS — "
+            "Warning conditions detected near "
+            "registered users."
+        )
+
+        alert_table = []
+
+        for alert in all_alerts:
+
+            alert_table.append({
+                "User":
+                    alert.get(
+                        "name",
+                        "Registered user"
+                    ),
+
+                "Alert Level":
+                    alert.get(
+                        "alert_level",
+                        "WARNING"
+                    ),
+
+                "Distance (km)":
+                    round(
+                        float(
+                            alert.get(
+                                "distance_km",
+                                0
+                            )
+                        ),
+                        2
+                    ),
+
+                "Rainfall (mm)":
+                    round(
+                        float(
+                            alert.get(
+                                "rainfall_mm",
+                                0
+                            )
+                        ),
+                        1
+                    ),
+
+                "Status":
+                    "WARNING GENERATED"
+            })
+
+        st.dataframe(
+            alert_table,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    else:
+
+        st.success(
+            "No registered users currently require "
+            "a prototype warning."
+        )
 
 
 # ============================================================
@@ -1533,8 +2447,13 @@ for result in results:
         "Warning":
             result["warning"],
 
-        "Early Warning":
-            result["early_warning_level"]
+        "Users to Alert":
+            len(
+                result.get(
+                    "alerts",
+                    []
+                )
+            )
 
     })
 
@@ -1586,29 +2505,18 @@ with r3:
     )
 
 
-st.caption("Early warning distribution")
-
-er1, er2, er3, er4 = st.columns(4)
-
-with er1:
-    st.metric("🔴 Critical", critical_warning_count)
-
-with er2:
-    st.metric("🟠 High", high_warning_count)
-
-with er3:
-    st.metric("🟡 Watch", watch_warning_count)
-
-with er4:
-    st.metric("🟢 Low", low_warning_count)
-
-
 # ============================================================
 # RAINFALL SCALE
 # ============================================================
 
 st.subheader(
     "Rainfall Monitoring Scale"
+)
+
+st.caption(
+    "Prototype decision rules: LOW <25 mm | WATCH 25–50 mm | "
+    "HIGH 50–100 mm | CRITICAL ≥100 mm. These are not official "
+    "government warning thresholds."
 )
 
 
@@ -1618,28 +2526,28 @@ rc1, rc2, rc3, rc4 = st.columns(4)
 with rc1:
 
     st.success(
-        "🟢 LOW\n\nBelow 25 mm"
+        "LOW\n\nBelow 25 mm"
     )
 
 
 with rc2:
 
     st.info(
-        "🟡 WATCH / ALERT\n\n25–50 mm"
+        "WATCH\n\n25–50 mm"
     )
 
 
 with rc3:
 
     st.warning(
-        "🟠 HIGH\n\n50–100 mm"
+        "HIGH\n\n50–100 mm"
     )
 
 
 with rc4:
 
     st.error(
-        "🔴 CRITICAL\n\n100 mm or above"
+        "CRITICAL\n\n100 mm or above"
     )
 
 
@@ -1723,7 +2631,11 @@ Random Forest model
      ↓
 LOW / MEDIUM / HIGH
      ↓
-Risk map + warning
+Location-based warning engine
+     ↓
+Registered user alert
+     ↓
+Risk map + early warning
 """,
     language="text"
 )
@@ -1742,7 +2654,9 @@ st.warning(
     "prediction. Future development should incorporate "
     "field-validated historical landslide inventory, "
     "terrain variables and scientifically validated "
-    "warning thresholds."
+    "warning thresholds. The notification module currently "
+    "generates prototype alerts for registered users but "
+    "does not send operational SMS messages."
 )
 
 
