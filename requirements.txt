@@ -4,3 +4,6 @@ rasterio
 geopandas
 scikit-learn
 matplotlib
+streamlit
+folium
+streamlit-folium
