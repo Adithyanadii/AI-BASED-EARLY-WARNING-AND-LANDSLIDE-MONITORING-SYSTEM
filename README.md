@@ -1,5 +1,9 @@
 # AI-Based Early Warning and Landslide Risk Monitoring System for NER
 
+## 🚀 Live Demo
+
+👉 [Open the Working Demo](https://ai-based-early-warning-and-landslide-monitoring-system-tlzbc4o.streamlit.app/)
+
 ## Smart India Hackathon 2026 — SIH26001
 
 An AI-based geospatial monitoring prototype designed to assess rainfall-driven landslide risk across the North Eastern Region (NER) of India and present location-specific risk and early-warning information through an interactive dashboard.
